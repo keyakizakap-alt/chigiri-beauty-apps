@@ -30,7 +30,7 @@ function response(data: unknown, status = 200, clearGuest = false) {
 
 export async function POST(request: Request) {
   const email = (await getAccountUserFromRequest(request))?.email;
-  if (!email) return response({ error: "ログイン状態を確認できません。" }, 401);
+  if (!email) return response({ error: "Googleでログインすると以前の相談を引き継げます。" }, 401);
 
   const guestId = cookieValue(request, ownerCookie);
   if (!guestId || !guestIdPattern.test(guestId)) return response({ migrated: false });
@@ -52,6 +52,6 @@ export async function POST(request: Request) {
     await getSqliteClient().batch(statements, "write");
     return response({ migrated: true }, 200, true);
   } catch {
-    return response({ error: "端末内の相談データをアカウントへ移行できませんでした。" }, 503);
+    return response({ error: "以前の相談はこの端末で引き続き確認できます。新しい相談はアカウントに保存されます。" }, 503);
   }
 }

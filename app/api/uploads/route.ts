@@ -5,7 +5,7 @@ import { chatSessions, uploadedAssets } from "@/db/schema";
 import { privateJson, requestOwner } from "@/server/request-owner";
 
 const allowedTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
-const maxBytes = 4 * 1024 * 1024;
+const maxBytes = 5 * 1024 * 1024;
 const idPattern = /^[0-9a-f-]{36}$/i;
 
 function safeFileName(name: string) {
@@ -18,7 +18,7 @@ export async function POST(request: Request) {
     const form = await request.formData();
     const image = form.get("image");
     if (!(image instanceof File) || !allowedTypes.has(image.type) || image.size <= 0 || image.size > maxBytes) {
-      return privateJson({ error: "JPEG・PNG・WebP形式で、4MB以下の画像を選択してください。" }, 400, owner.setCookie);
+      return privateJson({ error: "JPEG・PNG・WebP形式で、5MB以下の画像を選択してください。" }, 400, owner.setCookie);
     }
     const id = crypto.randomUUID();
     const fileName = safeFileName(image.name);
@@ -43,7 +43,7 @@ export async function POST(request: Request) {
     }
     return privateJson({ id, name: fileName, url: `/api/uploads?id=${encodeURIComponent(id)}` }, 200, owner.setCookie);
   } catch {
-    return privateJson({ error: "画像を保存できませんでした。" }, 503, owner.setCookie);
+    return privateJson({ error: "写真はあとから追加できます。少し時間をおいて、もう一度お試しください。" }, 503, owner.setCookie);
   }
 }
 
@@ -107,6 +107,6 @@ export async function DELETE(request: Request) {
     await db.delete(uploadedAssets).where(and(eq(uploadedAssets.ownerKey, owner.key), eq(uploadedAssets.id, id)));
     return privateJson({ deleted: true }, 200, owner.setCookie);
   } catch {
-    return privateJson({ error: "画像を削除できませんでした。" }, 503, owner.setCookie);
+    return privateJson({ error: "写真はそのまま残っています。少し時間をおいて、もう一度お試しください。" }, 503, owner.setCookie);
   }
 }

@@ -321,6 +321,39 @@ async function syncSessionBatch(sessions: ChatSession[]) {
     if (!response.ok) throw new Error("history sync failed");
   }
 }
+
+async function waitForHistoryRetry(attempt: number) {
+  await new Promise((resolve) => window.setTimeout(resolve, 450 * attempt));
+}
+
+async function requestHistoryGroup(specialistId: SpecialistId, cursor?: string) {
+  const query = new URLSearchParams({ specialist: specialistId });
+  if (cursor) query.set("cursor", cursor);
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    try {
+      const response = await fetch(`/api/consultations?${query.toString()}`, { credentials: "same-origin" });
+      if (!response.ok) throw new Error("history unavailable");
+      const data = await response.json() as { sessions?: ChatSession[]; nextCursor?: string | null };
+      return { specialistId, sessions: data.sessions ?? [], nextCursor: data.nextCursor ?? null };
+    } catch (error) {
+      lastError = error;
+      if (attempt < 2) await waitForHistoryRetry(attempt);
+    }
+  }
+  throw lastError;
+}
+
+async function requestAllHistoryGroups() {
+  // The first request establishes the anonymous owner cookie. The remaining
+  // specialists can then be loaded together without splitting ownership.
+  const first = await requestHistoryGroup(specialists[0].id);
+  const remaining = await Promise.allSettled(
+    specialists.slice(1).map((specialist) => requestHistoryGroup(specialist.id)),
+  );
+  const available = remaining.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
+  return { groups: [first, ...available], complete: available.length === specialists.length - 1 };
+}
 function initialMessageFor(specialistId: SpecialistId): Message {
   const specialist = specialists.find((item) => item.id === specialistId) ?? specialists[0];
   return { id: Date.now(), role: "assistant", text: specialist.greeting, time: "いま" };
@@ -556,7 +589,7 @@ export default function ChigiriApp({ viewer, signInPath, signOutPath }: ChigiriA
               method: "POST",
               credentials: "same-origin",
             });
-            if (!migration.ok) setServiceNotice("端末内の過去ログは移行できませんでしたが、新しい相談はアカウントに保存されます。");
+            if (!migration.ok) setServiceNotice("以前の相談はこの端末で引き続き確認できます。新しい相談はアカウントに保存されます。");
           }
           const pending = storedSessions(historyOutboxKey);
           const currentSource = localStorage.getItem(chatStorageKey);
@@ -574,22 +607,13 @@ export default function ChigiriApp({ viewer, signInPath, signOutPath }: ChigiriA
             }
           }
 
-          const loadFor = async (specialist: (typeof specialists)[number]) => {
-            const response = await fetch(`/api/consultations?specialist=${specialist.id}`, { credentials: "same-origin" });
-            if (!response.ok) throw new Error("history load failed");
-            const data = await response.json() as { sessions?: ChatSession[]; nextCursor?: string | null };
-            return { specialistId: specialist.id, sessions: data.sessions ?? [], nextCursor: data.nextCursor ?? null };
-          };
-          // The first request establishes the anonymous HttpOnly owner cookie when
-          // The first anonymous request establishes a private owner cookie. Later
-          // requests can share it, and Google login migrates it to the account.
-          const firstLoaded = await loadFor(specialists[0]);
-          const loaded = [firstLoaded, ...(await Promise.all(specialists.slice(1).map(loadFor)))];
+          const { groups: loaded, complete } = await requestAllHistoryGroups();
           const valid = loaded.flatMap((group) => group.sessions).filter((session) => session.id && session.messages?.length);
           const combined = mergeSessions(valid, cached, migratable);
           setHistoryCursors(Object.fromEntries(loaded.map((group) => [group.specialistId, group.nextCursor])));
           setSessions(combined);
           storeSessions(historyCacheKey, combined);
+          if (!complete) setServiceNotice("一部の以前の相談は、次に開いたときに順次表示されます。今の相談はそのまま続けられます。");
           const queued = mergeSessions(pending, migratable);
           if (queued.length) {
             await syncSessionBatch(queued);
@@ -846,7 +870,7 @@ export default function ChigiriApp({ viewer, signInPath, signOutPath }: ChigiriA
 
   async function fetchWeather() {
     if (!navigator.geolocation || conditionLoading) {
-      window.alert("この端末では現在地から天気を取得できません。睡眠時間やメモだけでも記録できます。");
+      window.alert("位置情報を使わずに記録できます。睡眠時間やメモだけでも大丈夫です。");
       return;
     }
     setConditionLoading(true);
@@ -877,7 +901,7 @@ export default function ChigiriApp({ viewer, signInPath, signOutPath }: ChigiriA
         tomorrowHumidity: data.daily?.relative_humidity_2m_max?.[1],
       });
     } catch {
-      window.alert("天気を取得できませんでした。位置情報の許可と通信状態をご確認ください。");
+      window.alert("天気はあとから追加できます。睡眠時間やメモだけ先に記録できます。");
     } finally {
       setConditionLoading(false);
     }
@@ -905,7 +929,7 @@ export default function ChigiriApp({ viewer, signInPath, signOutPath }: ChigiriA
       setSleepDraft("");
       setNoteDraft("");
     } catch {
-      window.alert("今日のコンディションを保存できませんでした。もう一度お試しください。");
+      window.alert("入力した内容は画面に残っています。少し時間をおいて、もう一度保存してください。");
     }
   }
 
@@ -941,7 +965,7 @@ export default function ChigiriApp({ viewer, signInPath, signOutPath }: ChigiriA
       }));
       setPendingImages((current) => [...current, ...uploaded].slice(0, 3));
     } catch {
-      window.alert("画像を追加できませんでした。通信状態を確認して、もう一度お試しください。");
+      window.alert("写真はあとから追加できます。少し時間をおいて、もう一度お試しください。");
     } finally {
       setUploading(false);
       if (imageInputRef.current) imageInputRef.current.value = "";
@@ -1074,9 +1098,7 @@ export default function ChigiriApp({ viewer, signInPath, signOutPath }: ChigiriA
     const cursor = historyCursors[specialistId];
     if (!cursor) return;
     try {
-      const response = await fetch(`/api/consultations?specialist=${specialistId}&cursor=${encodeURIComponent(cursor)}`, { credentials: "same-origin" });
-      if (!response.ok) throw new Error("history load failed");
-      const data = await response.json() as { sessions?: ChatSession[]; nextCursor?: string | null };
+      const data = await requestHistoryGroup(specialistId, cursor);
       setSessions((current) => {
         const next = mergeSessions(current, data.sessions ?? []);
         storeSessions(historyCacheKey, next);
@@ -1084,20 +1106,30 @@ export default function ChigiriApp({ viewer, signInPath, signOutPath }: ChigiriA
       });
       setHistoryCursors((current) => ({ ...current, [specialistId]: data.nextCursor ?? null }));
     } catch {
-      window.alert("過去の相談ログを読み込めませんでした。通信状態を確認して、もう一度お試しください。");
+      setHistorySyncState("error");
     }
   }
 
   async function retryHistorySync() {
     const pending = storedSessions(historyOutboxKey);
-    if (!pending.length) {
-      setHistorySyncState("saved");
-      return;
-    }
-    setHistorySyncState("saving");
+    setHistorySyncState("loading");
     try {
-      await syncSessionBatch(pending);
-      storeSessions(historyOutboxKey, []);
+      const { groups, complete } = await requestAllHistoryGroups();
+      const remote = groups.flatMap((group) => group.sessions).filter((session) => session.id && session.messages?.length);
+      setSessions((current) => {
+        const next = mergeSessions(remote, current);
+        storeSessions(historyCacheKey, next);
+        return next;
+      });
+      setHistoryCursors((current) => ({
+        ...current,
+        ...Object.fromEntries(groups.map((group) => [group.specialistId, group.nextCursor])),
+      }));
+      if (pending.length) {
+        await syncSessionBatch(pending);
+        storeSessions(historyOutboxKey, []);
+      }
+      setServiceNotice(complete ? "" : "一部の以前の相談は、次に開いたときに順次表示されます。今の相談はそのまま続けられます。");
       setHistorySyncState("saved");
     } catch {
       setHistorySyncState("error");
@@ -1121,7 +1153,7 @@ export default function ChigiriApp({ viewer, signInPath, signOutPath }: ChigiriA
       }
       setHistorySyncState("saved");
     } catch {
-      window.alert("相談ログを削除できませんでした。通信状態を確認して、もう一度お試しください。");
+      window.alert("この相談はそのまま残っています。少し時間をおいて、もう一度お試しください。");
     } finally {
       setDeletingSessionId("");
     }
@@ -1195,17 +1227,17 @@ export default function ChigiriApp({ viewer, signInPath, signOutPath }: ChigiriA
                     <span className="history-title"><b>{session.title}</b><time>{sessionTime(session.updatedAt)}</time></span>
                     <span className="history-preview">{lastMessage.replace(/\n/g, " ").slice(0, 42)}</span>
                   </button>
-                  <button type="button" className="history-delete" onClick={() => void deleteSession(session)} disabled={deletingSessionId === session.id} aria-label={`${session.title}を削除`} title="この相談ログを削除">{deletingSessionId === session.id ? "…" : "×"}</button>
+                  <button type="button" className="history-delete" onClick={() => void deleteSession(session)} disabled={deletingSessionId === session.id} aria-label={`${session.title}を削除`} title="この相談履歴を削除">{deletingSessionId === session.id ? "…" : "×"}</button>
                 </div>
               );
             }) : <p className="history-empty">{activeSpecialist.name}との相談を始めると、ここからあとで振り返れます。</p>}
-            {historyCursors[specialistId] ? <button type="button" className="history-more" onClick={() => void loadMoreHistory()}>過去のログをさらに表示</button> : null}
+            {historyCursors[specialistId] ? <button type="button" className="history-more" onClick={() => void loadMoreHistory()}>以前の相談をさらに表示</button> : null}
           </div>
           <p className={`history-retention ${historySyncState === "error" ? "error" : ""}`}>
-            {historySyncState === "loading" ? "相談履歴を読み込んでいます" : historySyncState === "saving" ? "相談内容を保存中" : historySyncState === "error" ? "この端末には保持しています。再同期してください" : viewer ? "相談内容はいつでも見返せます（アカウント保存）" : "この端末で相談内容を見返せます"}
+            {historySyncState === "loading" ? "これまでの相談を確認しています" : historySyncState === "saving" ? "相談内容を大切に保存しています" : historySyncState === "error" ? "相談内容はこのままお使いいただけます" : viewer ? "相談内容はいつでも見返せます（アカウント保存）" : "この端末で相談内容を見返せます"}
           </p>
           {!viewer ? <a className="history-signin" href={signInPath}>Googleでログインして端末をまたいで履歴を残す</a> : null}
-          {historySyncState === "error" ? <button type="button" className="history-more" onClick={() => void retryHistorySync()}>相談履歴を再同期</button> : null}
+          {historySyncState === "error" ? <button type="button" className="history-more history-refresh" onClick={() => void retryHistorySync()}>履歴を更新</button> : null}
         </div>
         <div className="rail-bottom">強い痛みや腫れなどがある場合は、製品の使用を止めて医療機関へ相談してください。</div>
       </aside>
@@ -1262,7 +1294,7 @@ export default function ChigiriApp({ viewer, signInPath, signOutPath }: ChigiriA
                             {evidence?.review.status === "available" ? (
                               <p><b>★ {evidence.review.average?.toFixed(1) ?? "--"} / 5</b> <small>（{evidence.review.count?.toLocaleString("ja-JP") ?? 0}件・{evidence.review.source}）</small></p>
                             ) : (
-                              <p>数値評価は未取得です。最新情報は投稿元で確認できます。</p>
+                              <p>最新の口コミは、各サイトから確認できます。</p>
                             )}
                             <button type="button" className="proposal-review-open" onClick={() => openProductInsight(product.id)}>サイトを選んで口コミを見る</button>
                             <small>評価は参考情報です。使用感には個人差があります。</small>
@@ -1605,7 +1637,7 @@ export default function ChigiriApp({ viewer, signInPath, signOutPath }: ChigiriA
               </article>
             ))}
             {!visibleProducts.length && (
-              <p className="no-products">見つかりませんでした。別の名前で検索してみてください。</p>
+              <p className="no-products">条件に合う候補を広げて探せます。名前やカテゴリを変えてみてください。</p>
             )}
             {displayedProducts.length < visibleProducts.length && (
               <button type="button" className="catalog-load-more" onClick={() => setCatalogLimit((current) => current + 60)}>

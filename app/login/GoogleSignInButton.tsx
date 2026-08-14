@@ -47,5 +47,5 @@ export default function GoogleSignInButton({ clientId }: { clientId: string }) {
     return () => script.remove();
   }, [clientId]);
 
-  return failed ? <p className="login-error">Googleログインを読み込めませんでした。通信環境を確認して再読み込みしてください。</p> : <div ref={target} className="google-signin" />;
+  return failed ? <p className="login-error">Googleでのログインを準備しています。少し時間をおいて、もう一度お試しください。</p> : <div ref={target} className="google-signin" />;
 }

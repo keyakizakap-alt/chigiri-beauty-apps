@@ -61,20 +61,20 @@ export async function GET(request: Request) {
     });
     return json({ sessions, nextCursor: hasMore ? String(offset + pageSize) : null }, 200, owner.setCookie);
   } catch {
-    return json({ error: "相談ログを読み込めませんでした。" }, 503, owner.setCookie);
+    return json({ error: "以前の相談は少し時間をおいて確認できます。今の相談はそのまま続けられます。" }, 503, owner.setCookie);
   }
 }
 
 export async function POST(request: Request) {
   const owner = await requestOwner(request);
   let body: { sessions?: unknown[] };
-  try { body = await request.json(); } catch { return json({ error: "保存内容を確認できません。" }, 400, owner.setCookie); }
+  try { body = await request.json(); } catch { return json({ error: "相談内容をもう一度確認して、保存してください。" }, 400, owner.setCookie); }
   if (!Array.isArray(body.sessions) || body.sessions.length < 1 || body.sessions.length > 50) {
-    return json({ error: "保存できる相談ログは1回につき50件までです。" }, 400, owner.setCookie);
+    return json({ error: "相談履歴は少しずつ大切に保存しています。" }, 400, owner.setCookie);
   }
   const sessions = body.sessions.map(validateSession);
   if (sessions.some((session) => !session)) {
-    return json({ error: "相談ログの形式を確認できません。" }, 400, owner.setCookie);
+    return json({ error: "相談内容をもう一度確認して、保存してください。" }, 400, owner.setCookie);
   }
 
   try {
@@ -108,7 +108,7 @@ export async function POST(request: Request) {
     }
     return json({ saved }, 200, owner.setCookie);
   } catch {
-    return json({ error: "相談ログを保存できませんでした。" }, 503, owner.setCookie);
+    return json({ error: "相談内容は画面に残っています。少し時間をおいて、もう一度お試しください。" }, 503, owner.setCookie);
   }
 }
 
@@ -136,7 +136,7 @@ function imageReferences(payloadJson: string) {
 export async function DELETE(request: Request) {
   const owner = await requestOwner(request);
   const id = new URL(request.url).searchParams.get("id");
-  if (!id || !sessionIdPattern.test(id)) return json({ error: "削除する相談ログを確認できません。" }, 400, owner.setCookie);
+  if (!id || !sessionIdPattern.test(id)) return json({ error: "削除する相談履歴を確認してください。" }, 400, owner.setCookie);
 
   try {
     await ensureChatSessionStorage();
@@ -162,6 +162,6 @@ export async function DELETE(request: Request) {
     }
     return json({ deleted: true }, 200, owner.setCookie);
   } catch {
-    return json({ error: "相談ログを削除できませんでした。" }, 503, owner.setCookie);
+    return json({ error: "相談履歴はそのまま残っています。少し時間をおいて、もう一度お試しください。" }, 503, owner.setCookie);
   }
 }

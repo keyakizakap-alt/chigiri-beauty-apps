@@ -378,7 +378,7 @@ export function buildLocalReply(
   const reviewSentence = assessment.phase === "propose" && candidateReview?.review.status === "available"
     ? `口コミは${candidateReview.review.source}で平均${candidateReview.review.average?.toFixed(1) ?? "--"}/5（${candidateReview.review.count?.toLocaleString("ja-JP") ?? "件数未確認"}件）です。評価は参考情報なので、同じ使い方でも使用感には個人差があります。`
     : assessment.phase === "propose" && candidateReview
-      ? "口コミの数値評価は現在取得できないため、提案カードの確認先リンクから最新情報を見られます。"
+      ? "最新の口コミは、提案カードにある確認先から見られます。"
       : "";
   const ownedSentence = assessment.phase === "propose" && ownedProducts.length
     ? `まずは手持ちの「${ownedProducts.slice(0, 2).map((product) => `${product.brand} ${product.name}`).join("」「")}」を活かす形で組みましょう。`

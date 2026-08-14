@@ -152,7 +152,7 @@ test("chat supports safe image attachment and a removable preview", async () => 
   assert.match(component, /message-images/);
   assert.match(component, /image\/jpeg,image\/png,image\/webp/);
   assert.match(uploadRoute, /image\/jpeg/);
-  assert.match(uploadRoute, /4 \* 1024 \* 1024/);
+  assert.match(uploadRoute, /5 \* 1024 \* 1024/);
   assert.match(uploadRoute, /X-Content-Type-Options/);
 });
 

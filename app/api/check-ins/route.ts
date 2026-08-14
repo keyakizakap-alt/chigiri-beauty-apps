@@ -63,7 +63,7 @@ export async function GET(request: Request) {
     });
     return json({ entries }, 200, owner.setCookie);
   } catch {
-    return json({ error: "コンディション記録を読み込めませんでした。" }, 503, owner.setCookie);
+    return json({ error: "これまでの記録は少し時間をおいて確認できます。" }, 503, owner.setCookie);
   }
 }
 
@@ -87,7 +87,7 @@ export async function POST(request: Request) {
     });
     return json({ saved: true }, 200, owner.setCookie);
   } catch {
-    return json({ error: "コンディション記録を保存できませんでした。" }, 503, owner.setCookie);
+    return json({ error: "入力した内容は画面に残っています。少し時間をおいて、もう一度お試しください。" }, 503, owner.setCookie);
   }
 }
 
@@ -100,6 +100,6 @@ export async function DELETE(request: Request) {
     await db.delete(beautyCheckIns).where(and(eq(beautyCheckIns.ownerKey, owner.key), eq(beautyCheckIns.id, id)));
     return json({ deleted: true }, 200, owner.setCookie);
   } catch {
-    return json({ error: "記録を削除できませんでした。" }, 503, owner.setCookie);
+    return json({ error: "記録はそのまま残っています。少し時間をおいて、もう一度お試しください。" }, 503, owner.setCookie);
   }
 }

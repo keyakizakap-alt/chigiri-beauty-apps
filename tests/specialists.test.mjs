@@ -46,7 +46,9 @@ test("persists consultation logs without a client-side retention cap", () => {
   assert.doesNotMatch(component, /localStorage\.setItem\(chatStorageKey/);
   assert.match(component, /historyOutboxKey/);
   assert.match(component, /keepalive: true/);
-  assert.match(component, /相談履歴を再同期/);
+  assert.match(component, /履歴を更新/);
+  assert.match(component, /requestAllHistoryGroups/);
+  assert.match(component, /Promise\.allSettled/);
   assert.match(consultationApi, /ensureChatSessionStorage/);
   assert.match(dbSource, /CREATE TABLE IF NOT EXISTS chat_sessions/);
   assert.match(dbSource, /getSqliteClient\(\)\.batch/);
