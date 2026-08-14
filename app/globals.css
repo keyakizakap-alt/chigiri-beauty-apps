@@ -370,6 +370,7 @@ button { cursor: pointer; }
 .insight-section h3 { margin: 0 0 9px; color: #2f4d3e; font-size: 14px; }
 .insight-section > p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.75; }
 .insight-section ul { margin: 11px 0 0; padding-left: 19px; color: #53675c; font-size: 11px; line-height: 1.85; }
+.ingredient-intro { margin-bottom: 10px !important; color: #60736a !important; }
 .ingredient-note { padding: 11px 0; border-top: 1px solid #edf0ed; }
 .ingredient-note:first-of-type { border-top: 0; }
 .ingredient-note strong { display: block; color: #456b57; font-size: 11px; }

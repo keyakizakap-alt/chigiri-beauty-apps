@@ -1729,6 +1729,7 @@ export default function ChigiriApp({ viewer, signInPath, signOutPath }: ChigiriA
 
             <section className="insight-section">
               <h3>気になる成分と役割</h3>
+              <p className="ingredient-intro">{detailInsight.ingredientIntro}</p>
               {detailInsight.ingredientNotes.length ? detailInsight.ingredientNotes.map((ingredient) => (
                 <article className="ingredient-note" key={ingredient.name}>
                   <strong>{ingredient.name}</strong>
