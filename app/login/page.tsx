@@ -4,8 +4,14 @@ import { googleAuthConfigured, googleClientId } from "@/server/account-auth";
 
 export const dynamic = "force-dynamic";
 
-export default function LoginPage() {
+function safeReturnTo(value: string | string[] | undefined) {
+  const candidate = typeof value === "string" ? value : "/";
+  return candidate.startsWith("/") && !candidate.startsWith("//") ? candidate : "/";
+}
+
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ returnTo?: string | string[] }> }) {
   const configured = googleAuthConfigured();
+  const returnTo = safeReturnTo((await searchParams).returnTo);
   return (
     <main className="login-page">
       <section className="login-card" aria-labelledby="login-title">
@@ -13,9 +19,9 @@ export default function LoginPage() {
         <p className="eyebrow">あなた専用の美容相談室</p>
         <h1 id="login-title">相談の続きを、どの端末からでも。</h1>
         <p>Googleアカウントでログインすると、5人のコンシェルジュとの相談履歴やマイアイテムをメールアドレス単位で安全に引き継げます。</p>
-        {configured ? <GoogleSignInButton clientId={googleClientId()} /> : <p className="login-error">Googleでのログインは順次ご利用いただけます。ログインせずに相談を続けることもできます。</p>}
+        {configured ? <GoogleSignInButton clientId={googleClientId()} returnTo={returnTo} /> : <p className="login-error">Googleでのログインは順次ご利用いただけます。ログインせずに相談を続けることもできます。</p>}
         <p className="login-privacy">GoogleのパスワードやアクセストークンはCHIGIRI Beautyに保存しません。</p>
-        <Link href="/" className="login-back">ログインせずに使う</Link>
+        <Link href={returnTo} className="login-back">ログインせずに使う</Link>
       </section>
     </main>
   );

@@ -15,7 +15,7 @@ declare global {
   }
 }
 
-export default function GoogleSignInButton({ clientId }: { clientId: string }) {
+export default function GoogleSignInButton({ clientId, returnTo }: { clientId: string; returnTo: string }) {
   const target = useRef<HTMLDivElement>(null);
   const [failed, setFailed] = useState(false);
 
@@ -28,7 +28,7 @@ export default function GoogleSignInButton({ clientId }: { clientId: string }) {
       if (!window.google || !target.current) return setFailed(true);
       window.google.accounts.id.initialize({
         client_id: clientId,
-        login_uri: `${window.location.origin}/api/auth/google/callback`,
+        login_uri: `${window.location.origin}/api/auth/google/callback?returnTo=${encodeURIComponent(returnTo)}`,
         ux_mode: "redirect",
         context: "signin",
       });
@@ -45,7 +45,7 @@ export default function GoogleSignInButton({ clientId }: { clientId: string }) {
     script.onerror = () => setFailed(true);
     document.head.appendChild(script);
     return () => script.remove();
-  }, [clientId]);
+  }, [clientId, returnTo]);
 
   return failed ? <p className="login-error">Googleでのログインを準備しています。少し時間をおいて、もう一度お試しください。</p> : <div ref={target} className="google-signin" />;
 }

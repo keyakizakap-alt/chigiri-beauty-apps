@@ -9,7 +9,7 @@ export default async function Home() {
   return (
     <ChigiriApp
       viewer={user ? { displayName: user.displayName } : null}
-      signInPath="/login"
+      signInPath="/login?returnTo=/"
       signOutPath="/api/auth/logout"
     />
   );

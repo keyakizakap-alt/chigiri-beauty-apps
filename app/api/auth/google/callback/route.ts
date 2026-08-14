@@ -6,6 +6,11 @@ function redirectToLogin(request: Request, error: string) {
   return Response.redirect(url, 303);
 }
 
+function safeReturnTo(request: Request) {
+  const candidate = new URL(request.url).searchParams.get("returnTo") ?? "/";
+  return candidate.startsWith("/") && !candidate.startsWith("//") ? candidate : "/";
+}
+
 export async function POST(request: Request) {
   let form: FormData;
   try { form = await request.formData(); } catch { return redirectToLogin(request, "invalid_request"); }
@@ -18,7 +23,7 @@ export async function POST(request: Request) {
   try {
     const user = await verifyGoogleCredential(credential);
     const token = await createSessionToken(user);
-    const response = Response.redirect(new URL("/", request.url), 303);
+    const response = Response.redirect(new URL(safeReturnTo(request), request.url), 303);
     response.headers.set("Set-Cookie", sessionCookie(token, request.url));
     response.headers.set("Cache-Control", "private, no-store");
     return response;

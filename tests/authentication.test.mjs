@@ -13,11 +13,15 @@ test("adds optional Google sign-in without replacing the existing app route", ()
   assert.match(page, /<ChigiriApp/);
   assert.match(page, /dynamic = "force-dynamic"/);
   assert.match(component, /Googleでログインして端末をまたいで履歴を残す/);
-  assert.match(component, /viewer \? signOutPath : signInPath/);
+  assert.match(component, /account-menu-panel/);
+  assert.match(component, /相談に戻る/);
+  assert.match(component, /href=\{signOutPath\}/);
+  assert.match(page, /signInPath="\/login\?returnTo=\/"/);
   assert.match(auth, /email_verified !== true/);
   assert.match(auth, /RSASSA-PKCS1-v1_5/);
   assert.match(auth, /HttpOnly; SameSite=Lax/);
   assert.match(callback, /g_csrf_token/);
+  assert.match(callback, /safeReturnTo/);
 });
 
 test("migrates the current anonymous owner's records only after trusted authentication", () => {

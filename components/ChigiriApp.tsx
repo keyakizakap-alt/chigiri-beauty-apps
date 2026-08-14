@@ -508,6 +508,7 @@ export default function ChigiriApp({ viewer, signInPath, signOutPath }: ChigiriA
   const [activeSessionId, setActiveSessionId] = useState("");
   const [historyReady, setHistoryReady] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [historyCursors, setHistoryCursors] = useState<Partial<Record<SpecialistId, string | null>>>({});
   const [historySyncState, setHistorySyncState] = useState<"loading" | "saved" | "saving" | "error">("loading");
   const [deletingSessionId, setDeletingSessionId] = useState("");
@@ -1254,15 +1255,39 @@ export default function ChigiriApp({ viewer, signInPath, signOutPath }: ChigiriA
             <button className="utility-button plan-button" onClick={() => setPlanOpen(true)}>今日のプラン</button>
             <button className="utility-button condition-button" onClick={() => setConditionOpen(true)}>今日の調子</button>
             <button className="utility-button shelf-button" onClick={() => setShelfOpen(true)}>マイアイテム{selectedIds.length ? ` ${selectedIds.length}` : ""}</button>
-            <a
-              className={`account-button ${viewer ? "signed-in" : ""}`}
-              href={viewer ? signOutPath : signInPath}
-              aria-label={viewer ? `${viewer.displayName}としてログイン中。ログアウトする` : "Googleでログインする"}
-              title={viewer ? `${viewer.displayName}としてログイン中` : "Googleでログインして履歴を保存"}
-            >
-              <span className="account-avatar" aria-hidden="true">{viewer ? viewer.displayName.slice(0, 1).toLocaleUpperCase("ja-JP") : "↗"}</span>
-              <span className="account-copy"><b>{viewer ? viewer.displayName : "ログイン"}</b><small>{viewer ? "アカウント保存" : "履歴を保存"}</small></span>
-            </a>
+            {viewer ? (
+              <div className="account-menu">
+                <button
+                  type="button"
+                  className="account-button signed-in"
+                  onClick={() => setAccountMenuOpen((open) => !open)}
+                  aria-expanded={accountMenuOpen}
+                  aria-controls="account-menu-panel"
+                  aria-label={`${viewer.displayName}のアカウントメニューを開く`}
+                  title={`${viewer.displayName}のアカウント`}
+                >
+                  <span className="account-avatar" aria-hidden="true">{viewer.displayName.slice(0, 1).toLocaleUpperCase("ja-JP")}</span>
+                  <span className="account-copy"><b>{viewer.displayName}</b><small>アカウント保存</small></span>
+                </button>
+                {accountMenuOpen ? (
+                  <div id="account-menu-panel" className="account-menu-panel" role="menu" aria-label="アカウントメニュー">
+                    <p><b>{viewer.displayName}</b><span>相談履歴はアカウントに保存されています</span></p>
+                    <button type="button" role="menuitem" onClick={() => setAccountMenuOpen(false)}>相談に戻る</button>
+                    <a role="menuitem" href={signOutPath}>ログアウト</a>
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <a
+                className="account-button"
+                href={signInPath}
+                aria-label="Googleでログインする"
+                title="Googleでログインして履歴を保存"
+              >
+                <span className="account-avatar" aria-hidden="true">↗</span>
+                <span className="account-copy"><b>ログイン</b><small>履歴を保存</small></span>
+              </a>
+            )}
           </div>
         </header>
 
