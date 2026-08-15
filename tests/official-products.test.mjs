@@ -134,6 +134,19 @@ test("chat stays available after a proposal and offers refinement prompts", asyn
   assert.doesNotMatch(component, /stage === "inventory" \|\| stage === "complete"/);
 });
 
+test("product and plan proposals are revealed at the reader's pace", async () => {
+  const component = await readFile(new URL("../components/ChigiriApp.tsx", import.meta.url), "utf8");
+  const styles = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  assert.match(component, /GuidedProposal/);
+  assert.match(component, /自分のペースで確認/);
+  assert.match(component, /次を読む/);
+  assert.match(component, /プランを順番に確認/);
+  assert.match(component, /todayPlan\.slice\(0, todayPlanVisibleCount\)/);
+  assert.match(component, /block: "nearest"/);
+  assert.doesNotMatch(component, /scrollIntoView\(\{ behavior: "smooth", block: "end" \}\)/);
+  assert.match(styles, /\.proposal-reading-controls/);
+});
+
 test("chat history can be opened and closed from the mobile header", async () => {
   const component = await readFile(new URL("../components/ChigiriApp.tsx", import.meta.url), "utf8");
   const styles = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
