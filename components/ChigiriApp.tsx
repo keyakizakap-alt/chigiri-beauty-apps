@@ -378,45 +378,6 @@ function createSessionId() {
   return `session-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-function proposalSections(text: string) {
-  const sections = text
-    .split(/\n{2,}/)
-    .flatMap((paragraph) => paragraph.match(/[^。！？\n]+[。！？]?/g) ?? [paragraph])
-    .map((section) => section.trim())
-    .filter(Boolean);
-  return sections.length ? sections : [text];
-}
-
-function GuidedProposal({ text, onComplete }: { text: string; onComplete: () => void }) {
-  const sections = useMemo(() => proposalSections(text), [text]);
-  const [visibleCount, setVisibleCount] = useState(1);
-  const textComplete = visibleCount >= sections.length;
-
-  return (
-    <div className="guided-proposal" aria-label="ゆっくり確認できる提案">
-      <div className="guided-proposal-copy">
-        {sections.slice(0, visibleCount).map((section, index) => <p key={`${index}-${section}`}>{section}</p>)}
-      </div>
-      <div className="proposal-reading-controls">
-        <div>
-          <strong>自分のペースで確認</strong>
-          <span>{textComplete ? "説明を確認しました" : `説明 ${visibleCount} / ${sections.length}`}</span>
-        </div>
-        <div>
-          <button
-            type="button"
-            className="reading-next"
-            onClick={() => textComplete ? onComplete() : setVisibleCount((count) => Math.min(sections.length, count + 1))}
-          >
-            {textComplete ? "商品候補を見る" : "次を読む"}
-          </button>
-          <button type="button" className="reading-all" onClick={onComplete}>まとめて表示</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function priceText(product: VerifiedProduct) {
   if (product.priceType === "open") return "オープン価格";
   if (product.price == null) return "価格未確認";
@@ -539,9 +500,6 @@ export default function ChigiriApp({ viewer, signInPath, signOutPath }: ChigiriA
   const [shelfOpen, setShelfOpen] = useState(false);
   const [conditionOpen, setConditionOpen] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
-  const [planReadingStep, setPlanReadingStep] = useState(0);
-  const [todayPlanVisibleCount, setTodayPlanVisibleCount] = useState(1);
-  const [guidedProposalIds, setGuidedProposalIds] = useState<Set<number>>(() => new Set());
   const [products, setProducts] = useState<VerifiedProduct[]>(fallbackProducts);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [budget, setBudget] = useState(3000);
@@ -884,16 +842,12 @@ export default function ChigiriApp({ viewer, signInPath, signOutPath }: ChigiriA
         ? inventoryPrompts[specialistId]
         : data.text ?? "うまくお返事をまとめられませんでした。少し言い換えて、もう一度送ってもらえますか？";
       const recommendedProducts = nextStage === "inventory" ? undefined : data.recommendedProducts?.slice(0, 2);
-      const assistantMessageId = messages.reduce((latest, message) => Math.max(latest, message.id), 0) + 1;
       setServiceNotice(data.mode === "local-fallback" ? "今は基本のケア案内でお返ししています。詳しいパーソナル提案は、少し時間をおいてお試しください。" : "");
       await new Promise((resolve) => setTimeout(resolve, 650 + Math.random() * 520));
-      if (recommendedProducts?.length) {
-        setGuidedProposalIds((current) => new Set(current).add(assistantMessageId));
-      }
       setMessages((current) => [
         ...current,
         {
-          id: assistantMessageId,
+          id: Date.now() + 1,
           role: "assistant",
           text: assistantText,
           time: now(),
@@ -906,7 +860,6 @@ export default function ChigiriApp({ viewer, signInPath, signOutPath }: ChigiriA
       setConversationFacts(data.conversationFacts?.slice(0, 20) ?? conversationFacts);
       setKnownContextKeys(data.knownContextKeys?.slice(0, 12) ?? knownContextKeys);
       setAskedContextKeys(data.askedContextKeys?.slice(0, 12) ?? askedContextKeys);
-      if (nextStage === "complete") setPlanReadingStep(0);
       setStage(nextStage);
     } catch {
       setMessages((current) => [
@@ -1057,8 +1010,6 @@ export default function ChigiriApp({ viewer, signInPath, signOutPath }: ChigiriA
     setAskedContextKeys([]);
     setInput("");
     setServiceNotice("");
-    setPlanReadingStep(0);
-    setGuidedProposalIds(new Set());
     setHistoryOpen(false);
   }
 
@@ -1076,8 +1027,6 @@ export default function ChigiriApp({ viewer, signInPath, signOutPath }: ChigiriA
     setKnownContextKeys(session.knownContextKeys ?? []);
     setAskedContextKeys(session.askedContextKeys ?? []);
     setInput("");
-    setPlanReadingStep(3);
-    setGuidedProposalIds(new Set());
     setHistoryOpen(false);
   }
 
@@ -1117,8 +1066,6 @@ export default function ChigiriApp({ viewer, signInPath, signOutPath }: ChigiriA
     setKnownContextKeys([]);
     setAskedContextKeys([]);
     setServiceNotice("");
-    setPlanReadingStep(0);
-    setGuidedProposalIds(new Set());
   }
 
   useEffect(() => {
@@ -1141,8 +1088,6 @@ export default function ChigiriApp({ viewer, signInPath, signOutPath }: ChigiriA
         setKnownContextKeys([]);
         setAskedContextKeys([]);
         setServiceNotice("");
-        setPlanReadingStep(0);
-        setGuidedProposalIds(new Set());
         setPendingImages([]);
         setInput("");
         setHistoryOpen(false);
@@ -1309,7 +1254,7 @@ export default function ChigiriApp({ viewer, signInPath, signOutPath }: ChigiriA
             <div className="status">{activeSpecialist.name} · {activeSpecialist.role}</div>
           </div>
           <div className="topbar-actions">
-            <button className="utility-button plan-button" onClick={() => { setTodayPlanVisibleCount(1); setPlanOpen(true); }}>今日のプラン</button>
+            <button className="utility-button plan-button" onClick={() => setPlanOpen(true)}>今日のプラン</button>
             <button className="utility-button condition-button" onClick={() => setConditionOpen(true)}>今日の調子</button>
             <button className="utility-button shelf-button" onClick={() => setShelfOpen(true)}>マイアイテム{selectedIds.length ? ` ${selectedIds.length}` : ""}</button>
             {viewer ? (
@@ -1361,47 +1306,34 @@ export default function ChigiriApp({ viewer, signInPath, signOutPath }: ChigiriA
               <div className={`message ${message.role}`} key={message.id}>
                 {message.role === "assistant" && <div className="avatar" aria-label="CHIGIRI" />}
                 <div className="bubble">
-                  {guidedProposalIds.has(message.id) ? (
-                    <GuidedProposal
-                      text={message.text}
-                      onComplete={() => setGuidedProposalIds((current) => {
-                        const next = new Set(current);
-                        next.delete(message.id);
-                        return next;
+                  {message.text}
+                  {!!message.recommendedProducts?.length && (
+                    <div className="message-products" aria-label="おすすめの製品候補">
+                      {message.recommendedProducts.map((product) => {
+                        const evidence = message.recommendationReviews?.find((item) => item.productId === product.id);
+                        return <article className="message-product-card" key={product.id}>
+                          <span>{categoryLabels[product.category]}の候補</span>
+                          <b>{product.brand}</b>
+                          <strong>{product.name}</strong>
+                          <p>{product.claims[0]}</p>
+                          <div className="proposal-review" aria-label={`${product.name}の口コミ情報`}>
+                            <span>口コミ</span>
+                            {evidence?.review.status === "available" ? (
+                              <p><b>★ {evidence.review.average?.toFixed(1) ?? "--"} / 5</b> <small>（{evidence.review.count?.toLocaleString("ja-JP") ?? 0}件・{evidence.review.source}）</small></p>
+                            ) : (
+                              <p>最新の口コミは、各サイトから確認できます。</p>
+                            )}
+                            <button type="button" className="proposal-review-open" onClick={() => openProductInsight(product.id)}>サイトを選んで口コミを見る</button>
+                            <small>評価は参考情報です。使用感には個人差があります。</small>
+                          </div>
+                          <div>
+                            <small>{product.volume ?? "容量は公式ページで確認"} · {priceText(product)}</small>
+                            <a href={product.officialUrl} target="_blank" rel="noopener noreferrer">商品を見る ↗</a>
+                          </div>
+                          <button type="button" className="insight-open" onClick={() => openProductInsight(product.id)}>成分・違い・口コミを見る</button>
+                        </article>;
                       })}
-                    />
-                  ) : (
-                    <>
-                      {message.text}
-                      {!!message.recommendedProducts?.length && (
-                        <div className="message-products" aria-label="おすすめの製品候補">
-                          {message.recommendedProducts.map((product) => {
-                            const evidence = message.recommendationReviews?.find((item) => item.productId === product.id);
-                            return <article className="message-product-card" key={product.id}>
-                              <span>{categoryLabels[product.category]}の候補</span>
-                              <b>{product.brand}</b>
-                              <strong>{product.name}</strong>
-                              <p>{product.claims[0]}</p>
-                              <div className="proposal-review" aria-label={`${product.name}の口コミ情報`}>
-                                <span>口コミ</span>
-                                {evidence?.review.status === "available" ? (
-                                  <p><b>★ {evidence.review.average?.toFixed(1) ?? "--"} / 5</b> <small>（{evidence.review.count?.toLocaleString("ja-JP") ?? 0}件・{evidence.review.source}）</small></p>
-                                ) : (
-                                  <p>最新の口コミは、各サイトから確認できます。</p>
-                                )}
-                                <button type="button" className="proposal-review-open" onClick={() => openProductInsight(product.id)}>サイトを選んで口コミを見る</button>
-                                <small>評価は参考情報です。使用感には個人差があります。</small>
-                              </div>
-                              <div>
-                                <small>{product.volume ?? "容量は公式ページで確認"} · {priceText(product)}</small>
-                                <a href={product.officialUrl} target="_blank" rel="noopener noreferrer">商品を見る ↗</a>
-                              </div>
-                              <button type="button" className="insight-open" onClick={() => openProductInsight(product.id)}>成分・違い・口コミを見る</button>
-                            </article>;
-                          })}
-                        </div>
-                      )}
-                    </>
+                    </div>
                   )}
                   {!!message.images?.length && (
                     <div className="message-images" aria-label="添付画像">
@@ -1420,7 +1352,7 @@ export default function ChigiriApp({ viewer, signInPath, signOutPath }: ChigiriA
               </div>
             )}
 
-            {!busy && guidedProposalIds.size === 0 && stage !== "inventory" && suggestedReplies.length > 0 && (
+            {!busy && stage !== "inventory" && suggestedReplies.length > 0 && (
               <div className="quick-replies">
                 {suggestedReplies.map((reply) => (
                   <button key={reply} onClick={() => void send(reply)}>{reply}</button>
@@ -1520,22 +1452,8 @@ export default function ChigiriApp({ viewer, signInPath, signOutPath }: ChigiriA
                     </div>
                   </div>
                 </div>
-                <div className="proposal-reading-controls plan-reading-controls" aria-label="プランの表示ペース">
-                  <div>
-                    <strong>プランを順番に確認</strong>
-                    <span>{["概要", "朝・夜の使い方", "商品と選定理由", "注意事項と調整"][planReadingStep]} · {planReadingStep + 1} / 4</span>
-                  </div>
-                  {planReadingStep < 3 ? (
-                    <div>
-                      <button type="button" className="reading-next" onClick={() => setPlanReadingStep((step) => Math.min(3, step + 1))}>
-                        {planReadingStep === 0 ? "使い方を見る" : planReadingStep === 1 ? "商品を見る" : "注意事項を見る"}
-                      </button>
-                      <button type="button" className="reading-all" onClick={() => setPlanReadingStep(3)}>まとめて表示</button>
-                    </div>
-                  ) : <span className="reading-complete">すべて表示中</span>}
-                </div>
                 <div className="result-body">
-                  {planReadingStep >= 1 && <div className="routine-columns proposal-section-reveal">
+                  <div className="routine-columns">
                     <div className="routine">
                       <h4>☀ 朝のルーティン</h4>
                       {result.morning.map((product, index) => (
@@ -1548,8 +1466,8 @@ export default function ChigiriApp({ viewer, signInPath, signOutPath }: ChigiriA
                         <div className="routine-step" key={product.id}><span className="step-no">{index + 1}</span><span>{product.name}<br />{categoryLabels[product.category]}</span></div>
                       ))}
                     </div>
-                  </div>}
-                  {planReadingStep >= 2 && (result.recommendation ? (
+                  </div>
+                  {result.recommendation ? (
                     <article className="recommendation purchase-card">
                       <div className="purchase-heading">
                         <div>
@@ -1609,21 +1527,19 @@ export default function ChigiriApp({ viewer, signInPath, signOutPath }: ChigiriA
                     <div className="recommendation"><h4>まずは手持ちだけで大丈夫です</h4><p>{result.shopping.id === "use-only" ? "足りない役割はありますが、先に使い方を整えて変化を見ましょう。" : "予算に合うものが見つからなかったので、今回は無理に買い足さなくて大丈夫です。"}</p></div>
                   ) : (
                     <div className="recommendation"><h4>新しい商品は必要ありません</h4><p>洗顔・保湿・紫外線対策の役割を、現在の手持ちで構成できます。まずはこの流れを続けて、使用感を見てから考えましょう。</p></div>
-                  ))}
-                  {planReadingStep >= 3 && <div className="proposal-section-reveal">
-                    <div className="result-note">肌や髪に合わないと感じたときは使用を中止してください。気になる症状が続く場合は、医療機関へご相談ください。</div>
-                    <div className="proposal-followup">
-                      <div>
-                        <h4>内容を変えたいときは</h4>
-                        <p>下のチャットで希望を教えてください。予算や手持ちに合わせて選び直します。</p>
-                      </div>
-                      <div className="proposal-followup-actions" aria-label="提案の調整例">
-                        {["もっと予算を抑えたい", "買い足しなしで考えたい", "朝のケアを簡単にしたい", "別の商品も見たい"].map((reply) => (
-                          <button type="button" key={reply} onClick={() => void send(reply)}>{reply}</button>
-                        ))}
-                      </div>
+                  )}
+                  <div className="result-note">肌や髪に合わないと感じたときは使用を中止してください。気になる症状が続く場合は、医療機関へご相談ください。</div>
+                  <div className="proposal-followup">
+                    <div>
+                      <h4>内容を変えたいときは</h4>
+                      <p>下のチャットで希望を教えてください。予算や手持ちに合わせて選び直します。</p>
                     </div>
-                  </div>}
+                    <div className="proposal-followup-actions" aria-label="提案の調整例">
+                      {["もっと予算を抑えたい", "買い足しなしで考えたい", "朝のケアを簡単にしたい", "別の商品も見たい"].map((reply) => (
+                        <button type="button" key={reply} onClick={() => void send(reply)}>{reply}</button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
@@ -1669,7 +1585,7 @@ export default function ChigiriApp({ viewer, signInPath, signOutPath }: ChigiriA
             <span>相談 {sessions.filter((session) => session.messages.some((message) => message.role === "user")).length}件</span>
           </div>
           <div className="daily-actions">
-            {todayPlan.slice(0, todayPlanVisibleCount).map((action, index) => {
+            {todayPlan.map((action, index) => {
               const specialist = specialists.find((item) => item.id === action.specialist) ?? specialists[0];
               return (
                 <article key={`${action.specialist}-${action.title}`}>
@@ -1681,18 +1597,6 @@ export default function ChigiriApp({ viewer, signInPath, signOutPath }: ChigiriA
               );
             })}
           </div>
-          {todayPlanVisibleCount < todayPlan.length ? (
-            <div className="proposal-reading-controls daily-reading-controls" aria-label="今日のプランの表示ペース">
-              <div>
-                <strong>1つずつ確認できます</strong>
-                <span>{todayPlanVisibleCount} / {todayPlan.length}件を表示中</span>
-              </div>
-              <div>
-                <button type="button" className="reading-next" onClick={() => setTodayPlanVisibleCount((count) => Math.min(todayPlan.length, count + 1))}>次のケアを見る</button>
-                <button type="button" className="reading-all" onClick={() => setTodayPlanVisibleCount(todayPlan.length)}>まとめて表示</button>
-              </div>
-            </div>
-          ) : null}
           <section className="plan-why">
             <span>CHIGIRIならでは</span>
             <p>肌・髪・ボディなどを別々に終わらせず、同じ日の天気や睡眠、手持ちを共通の手がかりとして使います。</p>
