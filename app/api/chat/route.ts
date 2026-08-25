@@ -1,6 +1,7 @@
 import { createChatReply } from "@/server/orca";
 import { officialProducts } from "@/data/official-products";
 import { ownedUploadDataUrl } from "@/server/upload-store";
+import { buildRecommendation } from "@/server/recommendation";
 
 const allowedStages = new Set(["concern", "skin", "inventory", "budget", "complete"]);
 const allowedSpecialists = new Set(["skin", "hair", "body", "makeup", "nail"]);
@@ -82,5 +83,19 @@ export async function POST(request: Request) {
     conditionParts.join("・"),
     memory,
   );
-  return Response.json(reply, { headers: { "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" } });
+
+  if (stage !== "complete") {
+    return Response.json(reply, { headers: { "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" } });
+  }
+
+  const recommendation = buildRecommendation({ text: input, ownedProducts });
+  return Response.json({
+    ...reply,
+    recommendationContext: recommendation.context,
+    recommendationEvidence: recommendation.evidence,
+    recommendationCandidates: recommendation.candidates.slice(0, 3).map((candidate) => ({
+      id: candidate.id,
+      score: candidate.finalScore,
+    })),
+  }, { headers: { "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" } });
 }
