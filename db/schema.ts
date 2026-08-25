@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { index, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const products = sqliteTable("products", {
   id: text("id").primaryKey(),
@@ -73,3 +73,80 @@ export const uploadedAssets = sqliteTable("uploaded_assets", {
   primaryKey({ columns: [table.ownerKey, table.id] }),
   index("uploaded_assets_owner_created_idx").on(table.ownerKey, table.createdAt),
 ]);
+
+export const ingredients = sqliteTable("ingredients", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  normalizedName: text("normalized_name").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+  uniqueIndex("ingredients_normalized_name_uidx").on(table.normalizedName),
+]);
+
+export const concerns = sqliteTable("concerns", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  category: text("category"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const productIngredients = sqliteTable("product_ingredients", {
+  productId: text("product_id").notNull(),
+  ingredientId: text("ingredient_id").notNull(),
+  sourceUrl: text("source_url").notNull(),
+  verifiedAt: text("verified_at").notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.productId, table.ingredientId] }),
+  index("product_ingredients_ingredient_idx").on(table.ingredientId),
+]);
+
+export const ingredientConcerns = sqliteTable("ingredient_concerns", {
+  ingredientId: text("ingredient_id").notNull(),
+  concernId: text("concern_id").notNull(),
+  relation: text("relation").notNull(),
+  evidenceLevel: text("evidence_level").notNull(),
+  sourceUrl: text("source_url").notNull(),
+  verifiedAt: text("verified_at").notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.ingredientId, table.concernId, table.relation] }),
+  index("ingredient_concerns_concern_idx").on(table.concernId, table.evidenceLevel),
+]);
+
+export const userProfiles = sqliteTable("user_profiles", {
+  ownerKey: text("owner_key").primaryKey(),
+  profileJson: text("profile_json").notNull().default("{}"),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const userItems = sqliteTable("user_items", {
+  ownerKey: text("owner_key").notNull(),
+  productId: text("product_id").notNull(),
+  status: text("status").notNull().default("using"),
+  usageFrequency: text("usage_frequency"),
+  userRating: integer("user_rating"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+  primaryKey({ columns: [table.ownerKey, table.productId] }),
+  index("user_items_owner_status_idx").on(table.ownerKey, table.status),
+]);
+
+export const recommendationRuns = sqliteTable("recommendation_runs", {
+  id: text("id").primaryKey(),
+  ownerKey: text("owner_key").notNull(),
+  consultationId: integer("consultation_id"),
+  contextJson: text("context_json").notNull(),
+  decision: text("decision").notNull(),
+  selectedProductId: text("selected_product_id"),
+  scoresJson: text("scores_json").notNull().default("[]"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+  index("recommendation_runs_owner_created_idx").on(table.ownerKey, table.createdAt),
+]);
+
+export const recommendationEvidence = sqliteTable("recommendation_evidence", {
+  recommendationId: text("recommendation_id").primaryKey(),
+  evidenceJson: text("evidence_json").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
