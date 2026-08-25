@@ -11,7 +11,7 @@ const concernPatterns: Array<[string, RegExp]> = [
 ];
 
 const preferencePatterns: Array<[string, RegExp]> = [
-  ["non_sticky", /べたつ(かない|きにくい)|ベタつ(かない|きにくい)|さっぱり/],
+  ["non_sticky", /べたつ(かない|きにくい)|ベタつ(かない|きにくい)|ベタつくのは嫌|べたつくのは嫌|さっぱり/],
   ["moist", /しっとり|保湿感/],
   ["fragrance_free", /無香料|香りなし|香りが苦手/],
   ["lightweight", /軽い|軽め|みずみずしい/],
@@ -40,14 +40,29 @@ function extractBudget(text: string) {
   return Number.isFinite(value) && value >= 100 && value <= 200000 ? value : null;
 }
 
+function categoryIntent(source: string, pattern: RegExp) {
+  const lines = source.split(/\n|。|！|!|？|\?/).map((line) => line.trim()).filter(Boolean);
+  let requested = false;
+  let excluded = false;
+  for (const line of lines) {
+    if (!pattern.test(line)) continue;
+    if (/(?:いらない|不要|以外|じゃない|ではない|避けたい|除外)/.test(line)) excluded = true;
+    else requested = true;
+  }
+  return { requested, excluded };
+}
+
 export function extractConsultationContext(text: string): ConsultationContext {
-  const source = text.trim().slice(0, 1200);
+  const source = text.trim().slice(0, 2400);
   const concerns = concernPatterns.filter(([, pattern]) => pattern.test(source)).map(([value]) => value);
   const preferences = preferencePatterns.filter(([, pattern]) => pattern.test(source)).map(([value]) => value);
-  const mentionedCategories = categoryPatterns.filter(([, pattern]) => pattern.test(source)).map(([value]) => value);
-  const exclusion = /(?:いらない|不要|以外|じゃない|避けたい|除外)/.test(source);
-  const requestedCategories = exclusion ? [] : mentionedCategories;
-  const excludedCategories = exclusion ? mentionedCategories : [];
+  const requestedCategories: string[] = [];
+  const excludedCategories: string[] = [];
+  for (const [category, pattern] of categoryPatterns) {
+    const intent = categoryIntent(source, pattern);
+    if (intent.excluded) excludedCategories.push(category);
+    else if (intent.requested) requestedCategories.push(category);
+  }
   const budgetJpy = extractBudget(source);
   const missingInformation: string[] = [];
 
