@@ -88,7 +88,13 @@ export async function POST(request: Request) {
     return Response.json(reply, { headers: { "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" } });
   }
 
-  const recommendation = buildRecommendation({ text: input, ownedProducts });
+  const consultationText = [
+    ...history.filter((message) => message.role === "user").map((message) => message.text),
+    ...memory.facts,
+    input,
+  ].filter(Boolean).slice(-12).join("\n");
+  const recommendation = buildRecommendation({ text: consultationText, ownedProducts });
+
   return Response.json({
     ...reply,
     recommendationContext: recommendation.context,
