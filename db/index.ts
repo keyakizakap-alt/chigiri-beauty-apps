@@ -73,6 +73,52 @@ export async function ensureAppStorage() {
         PRIMARY KEY(owner_key, id)
       )`,
       "CREATE INDEX IF NOT EXISTS uploaded_assets_owner_created_idx ON uploaded_assets (owner_key, created_at)",
+      `CREATE TABLE IF NOT EXISTS ingredients (
+        id text PRIMARY KEY NOT NULL, name text NOT NULL, normalized_name text NOT NULL UNIQUE,
+        created_at text DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        updated_at text DEFAULT CURRENT_TIMESTAMP NOT NULL
+      )`,
+      `CREATE TABLE IF NOT EXISTS concerns (
+        id text PRIMARY KEY NOT NULL, name text NOT NULL, category text,
+        created_at text DEFAULT CURRENT_TIMESTAMP NOT NULL
+      )`,
+      `CREATE TABLE IF NOT EXISTS product_ingredients (
+        product_id text NOT NULL, ingredient_id text NOT NULL,
+        source_url text NOT NULL, verified_at text NOT NULL,
+        PRIMARY KEY(product_id, ingredient_id)
+      )`,
+      "CREATE INDEX IF NOT EXISTS product_ingredients_ingredient_idx ON product_ingredients (ingredient_id)",
+      `CREATE TABLE IF NOT EXISTS ingredient_concerns (
+        ingredient_id text NOT NULL, concern_id text NOT NULL, relation text NOT NULL,
+        evidence_level text NOT NULL, source_url text NOT NULL, verified_at text NOT NULL,
+        PRIMARY KEY(ingredient_id, concern_id, relation)
+      )`,
+      "CREATE INDEX IF NOT EXISTS ingredient_concerns_concern_idx ON ingredient_concerns (concern_id, evidence_level)",
+      `CREATE TABLE IF NOT EXISTS user_profiles (
+        owner_key text PRIMARY KEY NOT NULL,
+        profile_json text DEFAULT '{}' NOT NULL,
+        updated_at text DEFAULT CURRENT_TIMESTAMP NOT NULL
+      )`,
+      `CREATE TABLE IF NOT EXISTS user_items (
+        owner_key text NOT NULL, product_id text NOT NULL,
+        status text DEFAULT 'using' NOT NULL, usage_frequency text, user_rating integer,
+        created_at text DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        updated_at text DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        PRIMARY KEY(owner_key, product_id)
+      )`,
+      "CREATE INDEX IF NOT EXISTS user_items_owner_status_idx ON user_items (owner_key, status)",
+      `CREATE TABLE IF NOT EXISTS recommendation_runs (
+        id text PRIMARY KEY NOT NULL, owner_key text NOT NULL, consultation_id integer,
+        context_json text NOT NULL, decision text NOT NULL, selected_product_id text,
+        scores_json text DEFAULT '[]' NOT NULL,
+        created_at text DEFAULT CURRENT_TIMESTAMP NOT NULL
+      )`,
+      "CREATE INDEX IF NOT EXISTS recommendation_runs_owner_created_idx ON recommendation_runs (owner_key, created_at)",
+      `CREATE TABLE IF NOT EXISTS recommendation_evidence (
+        recommendation_id text PRIMARY KEY NOT NULL,
+        evidence_json text NOT NULL,
+        created_at text DEFAULT CURRENT_TIMESTAMP NOT NULL
+      )`,
     ], "write").then(() => undefined).catch((error) => {
       storageReady = null;
       throw error;
