@@ -27,7 +27,9 @@ const decoder = new TextDecoder();
 function cookieValue(cookieHeader: string, name: string) {
   for (const item of cookieHeader.split(";")) {
     const [key, ...value] = item.trim().split("=");
-    if (key === name) return decodeURIComponent(value.join("="));
+    if (key === name) {
+      try { return decodeURIComponent(value.join("=")); } catch { return null; }
+    }
   }
   return null;
 }

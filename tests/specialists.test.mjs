@@ -59,7 +59,8 @@ test("lets the owner delete a selected log and its attached images", () => {
   assert.match(component, /この操作は取り消せません/);
   assert.match(component, /method: "DELETE"/);
   assert.match(consultationApi, /deletedChatSessions/);
-  assert.match(consultationApi, /del\(\[\.\.\.new Set\(references\.keys\)\]\)/);
+  assert.match(consultationApi, /del\(assets\.map/);
+  assert.doesNotMatch(consultationApi, /del\(.*references\.keys/);
   assert.match(consultationApi, /eq\(chatSessions\.ownerKey, owner\.key\)/);
 });
 

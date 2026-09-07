@@ -1,3 +1,4 @@
+import { mutationGuard, readJson } from "@/server/request-security.mjs";
 import { and, desc, eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { beautyCheckIns } from "@/db/schema";
@@ -68,9 +69,11 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const forbidden = mutationGuard(request);
+  if (forbidden) return forbidden;
   const owner = await requestOwner(request);
   let body: unknown;
-  try { body = await request.json(); } catch { return json({ error: "記録内容を確認できません。" }, 400, owner.setCookie); }
+  try { body = await readJson(request); } catch { return json({ error: "記録内容を確認できません。" }, 400, owner.setCookie); }
   const entry = validate(body);
   if (!entry) return json({ error: "記録内容を確認してください。" }, 400, owner.setCookie);
   try {
@@ -92,6 +95,8 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  const forbidden = mutationGuard(request);
+  if (forbidden) return forbidden;
   const owner = await requestOwner(request);
   const id = new URL(request.url).searchParams.get("id");
   if (!id || !idPattern.test(id)) return json({ error: "削除する記録を確認できません。" }, 400, owner.setCookie);

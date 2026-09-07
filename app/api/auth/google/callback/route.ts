@@ -8,7 +8,8 @@ function redirectToLogin(request: Request, error: string) {
 
 function safeReturnTo(request: Request) {
   const candidate = new URL(request.url).searchParams.get("returnTo") ?? "/";
-  return candidate.startsWith("/") && !candidate.startsWith("//") ? candidate : "/";
+  const resolved = new URL(candidate, request.url);
+  return candidate.startsWith("/") && resolved.origin === new URL(request.url).origin ? resolved.pathname + resolved.search : "/";
 }
 
 export async function POST(request: Request) {
@@ -17,7 +18,7 @@ export async function POST(request: Request) {
   const csrfFromBody = form.get("g_csrf_token");
   const csrfFromCookie = (request.headers.get("cookie") ?? "").split(";").map((part) => part.trim()).find((part) => part.startsWith("g_csrf_token="))?.slice("g_csrf_token=".length);
   const credential = form.get("credential");
-  if (typeof csrfFromBody !== "string" || !csrfFromCookie || csrfFromBody !== decodeURIComponent(csrfFromCookie) || typeof credential !== "string") {
+  if (typeof csrfFromBody !== "string" || !csrfFromCookie || csrfFromBody !== csrfFromCookie || typeof credential !== "string") {
     return redirectToLogin(request, "csrf");
   }
   try {

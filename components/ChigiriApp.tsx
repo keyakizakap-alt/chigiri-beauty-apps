@@ -103,7 +103,7 @@ type ChigiriPlan = {
   reason: string;
 };
 
-type Viewer = { displayName: string };
+type Viewer = { displayName: string; storageId: string };
 
 type ChigiriAppProps = {
   viewer: Viewer | null;
@@ -265,8 +265,8 @@ function selectBestFromTopThree(plans: ChigiriPlan[], selectedProductCount: numb
 }
 
 const chatStorageKey = "chigiri-specialist-sessions-v4";
-const historyCacheKey = "chigiri-consultation-cache-v1";
-const historyOutboxKey = "chigiri-consultation-outbox-v1";
+
+
 
 function storedSessions(key: string) {
   try {
@@ -493,6 +493,8 @@ function careHint(specialistId: SpecialistId, condition?: ConditionEntry | null)
 }
 
 export default function ChigiriApp({ viewer, signInPath, signOutPath }: ChigiriAppProps) {
+  const historyCacheKey = `chigiri-consultation-cache-v2:${viewer?.storageId ?? "guest"}`;
+  const historyOutboxKey = `chigiri-consultation-outbox-v2:${viewer?.storageId ?? "guest"}`;
   const [splashVisible, setSplashVisible] = useState(true);
   const [stage, setStage] = useState<Stage>("concern");
   const [input, setInput] = useState("");
@@ -593,20 +595,9 @@ export default function ChigiriApp({ viewer, signInPath, signOutPath }: ChigiriA
             if (!migration.ok) setServiceNotice("以前の相談はこの端末で引き続き確認できます。新しい相談はアカウントに保存されます。");
           }
           const pending = storedSessions(historyOutboxKey);
-          const currentSource = localStorage.getItem(chatStorageKey);
-          let migratable: ChatSession[] = [];
-          if (currentSource) {
-            const stored = JSON.parse(currentSource) as Array<Omit<ChatSession, "specialistId"> & { specialistId?: SpecialistId }>;
-            migratable = stored.filter((session) => session.id && session.messages?.length).map((session) => {
-              const firstAssistantText = session.messages.find((message) => message.role === "assistant")?.text ?? "";
-              const identifiedSpecialist = specialists.find((specialist) => firstAssistantText.includes(specialist.name))?.id;
-              return { ...session, specialistId: identifiedSpecialist ?? session.specialistId ?? "skin" } as ChatSession;
-            });
-            for (const session of migratable) {
-              cacheSession(historyCacheKey, session);
-              cacheSession(historyOutboxKey, session);
-            }
-          }
+          // Old unscoped caches cannot be attributed safely to the current account.
+          const currentSource = null;
+          const migratable: ChatSession[] = [];
 
           const { groups: loaded, complete } = await requestAllHistoryGroups();
           const valid = loaded.flatMap((group) => group.sessions).filter((session) => session.id && session.messages?.length);
@@ -634,7 +625,7 @@ export default function ChigiriApp({ viewer, signInPath, signOutPath }: ChigiriA
       })();
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [viewer]);
+  }, [viewer, historyCacheKey, historyOutboxKey]);
 
   useEffect(() => {
     if (!historyReady || !activeSessionId) return;
@@ -680,7 +671,7 @@ export default function ChigiriApp({ viewer, signInPath, signOutPath }: ChigiriA
       });
     }, 450);
     return () => window.clearTimeout(timer);
-  }, [activeSessionId, askedContextKeys, budget, conversationFacts, conversationPhase, historyReady, knownContextKeys, messages, selectedIds, specialistId, stage, suggestedReplies]);
+  }, [historyCacheKey, historyOutboxKey, activeSessionId, askedContextKeys, budget, conversationFacts, conversationPhase, historyReady, knownContextKeys, messages, selectedIds, specialistId, stage, suggestedReplies]);
 
   useEffect(() => {
     if (!busy) return;
@@ -805,6 +796,7 @@ export default function ChigiriApp({ viewer, signInPath, signOutPath }: ChigiriA
     try {
       const response = await fetch("/api/chat", {
         method: "POST",
+        signal: AbortSignal.timeout(40_000),
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           stage,
@@ -822,6 +814,10 @@ export default function ChigiriApp({ viewer, signInPath, signOutPath }: ChigiriA
         }),
       });
       const data = (await response.json()) as { text?: string; recommendedProducts?: VerifiedProduct[]; recommendationReviews?: ProductReviewEvidence[]; conversationPhase?: ConversationPhase; suggestedReplies?: string[]; conversationFacts?: string[]; knownContextKeys?: string[]; askedContextKeys?: string[]; mode?: string };
+      if (!response.ok) {
+        setServiceNotice(response.status === 429 ? "利用上限に達しました。時間をおいてもう一度お試しください。" : "応答を取得できませんでした。少し時間をおいて再送してください。");
+        return;
+      }
       const userTurnCount = messages.filter((message) => message.role === "user").length + 1;
       const isUnknownAnswer = /^(わからない|分からない|不明|特にない|まだ決めていない)$/.test(value);
       const shouldEnterInventory = stage === "concern"
@@ -1242,7 +1238,7 @@ export default function ChigiriApp({ viewer, signInPath, signOutPath }: ChigiriA
           {!viewer ? <a className="history-signin" href={signInPath}>Googleでログインして端末をまたいで履歴を残す</a> : null}
           {historySyncState === "error" ? <button type="button" className="history-more history-refresh" onClick={() => void retryHistorySync()}>履歴を更新</button> : null}
         </div>
-        <div className="rail-bottom">強い痛みや腫れなどがある場合は、製品の使用を止めて医療機関へ相談してください。</div>
+        <div className="rail-bottom"><a href="/settings">データ管理</a><br />強い痛みや腫れなどがある場合は、製品の使用を止めて医療機関へ相談してください。</div>
       </aside>
 
       <main className="main">

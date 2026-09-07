@@ -27,6 +27,8 @@ export async function getDb() {
 export async function ensureAppStorage() {
   if (!storageReady) {
     storageReady = getSqliteClient().batch([
+      `CREATE TABLE IF NOT EXISTS billing_customers (owner_key TEXT PRIMARY KEY, customer_id TEXT NOT NULL UNIQUE)`,
+      `CREATE TABLE IF NOT EXISTS usage_limits (bucket TEXT PRIMARY KEY, window_start INTEGER NOT NULL, used INTEGER NOT NULL)`,
       `CREATE TABLE IF NOT EXISTS products (
         id text PRIMARY KEY NOT NULL, brand text NOT NULL, name text NOT NULL,
         category text NOT NULL, volume text, price integer, price_type text NOT NULL,

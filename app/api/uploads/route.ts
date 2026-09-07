@@ -1,7 +1,9 @@
+import { checkUsage } from "@/server/usage-limit";
+import { mutationGuard } from "@/server/request-security.mjs";
 import { and, eq } from "drizzle-orm";
 import { del, get, put } from "@vercel/blob";
 import { getDb } from "@/db";
-import { chatSessions, uploadedAssets } from "@/db/schema";
+import { uploadedAssets } from "@/db/schema";
 import { privateJson, requestOwner } from "@/server/request-owner";
 
 const allowedTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
@@ -13,7 +15,11 @@ function safeFileName(name: string) {
 }
 
 export async function POST(request: Request) {
-  const owner = await requestOwner(request);
+  const forbidden = mutationGuard(request);
+  if (forbidden) return forbidden;
+  const usage = await checkUsage(request, "upload");
+  if (usage.response) return usage.response;
+  const owner = usage.owner;
   try {
     const form = await request.formData();
     const image = form.get("image");
@@ -65,19 +71,11 @@ export async function GET(request: Request) {
         .limit(1);
       objectKey = rows[0]?.objectKey ?? null;
     } else if (legacyKey) {
-      const sessions = await db.select({ payloadJson: chatSessions.payloadJson })
-        .from(chatSessions)
-        .where(eq(chatSessions.ownerKey, owner.key));
-      const owned = sessions.some((session) => {
-        try {
-          const payload = JSON.parse(session.payloadJson) as { messages?: Array<{ images?: Array<{ url?: string }> }> };
-          return (payload.messages ?? []).some((message) => (message.images ?? []).some((image) => {
-            if (!image.url?.startsWith("/api/uploads?")) return false;
-            return new URL(image.url, "https://app.local").searchParams.get("key") === legacyKey;
-          }));
-        } catch { return false; }
-      });
-      if (owned) objectKey = legacyKey;
+      const assets = await db.select({ objectKey: uploadedAssets.objectKey })
+        .from(uploadedAssets)
+        .where(and(eq(uploadedAssets.ownerKey, owner.key), eq(uploadedAssets.objectKey, legacyKey)))
+        .limit(1);
+      objectKey = assets[0]?.objectKey ?? null;
     }
     if (!objectKey) return new Response("Not found", { status: 404 });
     const object = await get(objectKey, { access: "private" });
@@ -93,6 +91,8 @@ export async function GET(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  const forbidden = mutationGuard(request);
+  if (forbidden) return forbidden;
   const owner = await requestOwner(request);
   const id = new URL(request.url).searchParams.get("id");
   if (!id || !idPattern.test(id)) return privateJson({ error: "削除する画像を確認できません。" }, 400, owner.setCookie);

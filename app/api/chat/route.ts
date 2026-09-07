@@ -1,3 +1,6 @@
+import { mutationGuard, readJson, validChatBody } from "@/server/request-security.mjs";
+import { checkUsage } from "@/server/usage-limit";
+import { privateJson } from "@/server/request-owner";
 import { createChatReply } from "@/server/orca";
 import { officialProducts } from "@/data/official-products";
 import { ownedUploadDataUrl } from "@/server/upload-store";
@@ -9,6 +12,8 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 export async function POST(request: Request) {
+  const forbidden = mutationGuard(request);
+  if (forbidden) return forbidden;
   let body: {
     stage?: string;
     specialist?: string;
@@ -27,7 +32,8 @@ export async function POST(request: Request) {
     memory?: { facts?: unknown[]; knownKeys?: unknown[]; askedKeys?: unknown[] };
   };
   try {
-    body = await request.json();
+    body = await readJson(request);
+    if (!validChatBody(body)) throw new Error("Invalid body");
   } catch {
     return Response.json({ error: "入力内容を確認してください。" }, { status: 400, headers: { "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" } });
   }
@@ -48,6 +54,8 @@ export async function POST(request: Request) {
     askedKeys: (body.memory?.askedKeys ?? []).filter((value): value is string => typeof value === "string").map((value) => value.slice(0, 30)).slice(0, 12),
   };
 
+  const usage = await checkUsage(request, "chat");
+  if (usage.response) return usage.response;
   const imageIds = (body.images ?? []).flatMap((value) => {
     if (typeof value !== "string" || !value.startsWith("/api/uploads?")) return [];
     const id = new URL(value, request.url).searchParams.get("id");
@@ -82,5 +90,5 @@ export async function POST(request: Request) {
     conditionParts.join("・"),
     memory,
   );
-  return Response.json(reply, { headers: { "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" } });
+  return privateJson(reply, 200, usage.owner.setCookie);
 }

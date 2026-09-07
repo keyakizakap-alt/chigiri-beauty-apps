@@ -495,7 +495,13 @@ button { cursor: pointer; }
   .account-avatar { width: 34px; height: 34px; }
   .account-copy { display: none; }
   .account-menu-panel { top: calc(100% + 7px); right: -2px; width: min(228px, calc(100vw - 24px)); }
-  .condition-button { display: none; }
+  .condition-button { display: inline-flex; align-items: center; }
+  .topbar { height: auto; min-height: 64px; flex-wrap: wrap; gap: 8px; padding-block: 10px; }
+  .topbar-actions { flex-wrap: wrap; }
+  .utility-button { min-height: 44px; font-size: 11px; }
+  @media (max-width: 480px) {
+    .topbar-actions { width: 100%; justify-content: flex-start; }
+  }
   .conversation { width: min(100% - 26px, 760px); padding-top: 28px; }
   .intro h1 { font-size: 31px; }
   .composer-wrap { left: 0; padding: 18px 13px 20px; }
@@ -520,3 +526,11 @@ button { cursor: pointer; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+
+.settings-page { max-width: 760px; margin: 0 auto; padding: 32px 20px; line-height: 1.8; }
+.settings-page section { margin-top: 24px; padding: 20px; border: 1px solid var(--line); border-radius: 16px; background: white; }
+.settings-page h1 { font-size: 26px; }
+.settings-page h2 { font-size: 18px; }
+.settings-page a { color: #355d4b; text-decoration: underline; }
+.settings-page button { min-height: 44px; padding: 8px 16px; border: 1px solid #ab7065; border-radius: 10px; background: #fff8f5; color: #81392c; }
+.settings-page button:disabled { opacity: .5; }

@@ -73,3 +73,14 @@ export const uploadedAssets = sqliteTable("uploaded_assets", {
   primaryKey({ columns: [table.ownerKey, table.id] }),
   index("uploaded_assets_owner_created_idx").on(table.ownerKey, table.createdAt),
 ]);
+
+export const usageLimits = sqliteTable("usage_limits", {
+  bucket: text("bucket").primaryKey(),
+  windowStart: integer("window_start").notNull(),
+  used: integer("used").notNull(),
+});
+
+export const billingCustomers = sqliteTable("billing_customers", {
+  ownerKey: text("owner_key").primaryKey(),
+  customerId: text("customer_id").notNull().unique(),
+});

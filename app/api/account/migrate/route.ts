@@ -1,3 +1,4 @@
+import { mutationGuard } from "@/server/request-security.mjs";
 import { ensureChatSessionStorage, getSqliteClient } from "@/db";
 import { getAccountUserFromRequest } from "@/server/account-auth";
 
@@ -8,7 +9,9 @@ function cookieValue(request: Request, name: string) {
   const cookies = request.headers.get("cookie") ?? "";
   for (const item of cookies.split(";")) {
     const [key, ...value] = item.trim().split("=");
-    if (key === name) return decodeURIComponent(value.join("="));
+    if (key === name) {
+      try { return decodeURIComponent(value.join("=")); } catch { return null; }
+    }
   }
   return null;
 }
@@ -29,6 +32,8 @@ function response(data: unknown, status = 200, clearGuest = false) {
 }
 
 export async function POST(request: Request) {
+  const forbidden = mutationGuard(request);
+  if (forbidden) return forbidden;
   const email = (await getAccountUserFromRequest(request))?.email;
   if (!email) return response({ error: "Googleでログインすると以前の相談を引き継げます。" }, 401);
 

@@ -1,3 +1,4 @@
+import { mutationGuard, readJson } from "@/server/request-security.mjs";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { del } from "@vercel/blob";
 import { ensureChatSessionStorage, getDb } from "@/db";
@@ -31,7 +32,8 @@ function validateSession(value: unknown): StoredSession | null {
     || typeof session.title !== "string" || !session.title.trim() || session.title.length > 80
     || typeof session.updatedAt !== "string" || Number.isNaN(Date.parse(session.updatedAt))
     || typeof session.specialistId !== "string" || !specialists.has(session.specialistId)
-    || !Array.isArray(session.messages)
+    || !Array.isArray(session.messages) || session.messages.length > 500
+    || JSON.stringify(session).length > 200_000
   ) return null;
   return session as StoredSession;
 }
@@ -66,10 +68,12 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const forbidden = mutationGuard(request);
+  if (forbidden) return forbidden;
   const owner = await requestOwner(request);
   let body: { sessions?: unknown[] };
-  try { body = await request.json(); } catch { return json({ error: "相談内容をもう一度確認して、保存してください。" }, 400, owner.setCookie); }
-  if (!Array.isArray(body.sessions) || body.sessions.length < 1 || body.sessions.length > 50) {
+  try { body = await readJson(request, 1_048_576); } catch { return json({ error: "相談内容をもう一度確認して、保存してください。" }, 400, owner.setCookie); }
+  if (!body || !Array.isArray(body.sessions) || body.sessions.length < 1 || body.sessions.length > 50) {
     return json({ error: "相談履歴は少しずつ大切に保存しています。" }, 400, owner.setCookie);
   }
   const sessions = body.sessions.map(validateSession);
@@ -134,6 +138,8 @@ function imageReferences(payloadJson: string) {
 }
 
 export async function DELETE(request: Request) {
+  const forbidden = mutationGuard(request);
+  if (forbidden) return forbidden;
   const owner = await requestOwner(request);
   const id = new URL(request.url).searchParams.get("id");
   if (!id || !sessionIdPattern.test(id)) return json({ error: "削除する相談履歴を確認してください。" }, 400, owner.setCookie);
@@ -149,16 +155,18 @@ export async function DELETE(request: Request) {
     await db.delete(chatSessions).where(and(eq(chatSessions.ownerKey, owner.key), eq(chatSessions.id, id)));
 
     const references = existing[0] ? imageReferences(existing[0].payloadJson) : { keys: [], ids: [] };
+    // Only the server-owned asset registry can authorize object deletion.
     if (references.ids.length) {
       const assets = await db.select({ objectKey: uploadedAssets.objectKey })
         .from(uploadedAssets)
         .where(and(eq(uploadedAssets.ownerKey, owner.key), inArray(uploadedAssets.id, references.ids)));
-      references.keys.push(...assets.map((asset) => asset.objectKey));
-      await db.delete(uploadedAssets).where(and(eq(uploadedAssets.ownerKey, owner.key), inArray(uploadedAssets.id, references.ids)));
-    }
-    if (references.keys.length) {
-      try { await del([...new Set(references.keys)]); }
-      catch { /* The conversation is deleted even if an orphaned image needs later cleanup. */ }
+      if (assets.length) {
+        // Keep registry rows on failure so cleanup can be retried.
+        try {
+          await del(assets.map((asset) => asset.objectKey));
+          await db.delete(uploadedAssets).where(and(eq(uploadedAssets.ownerKey, owner.key), inArray(uploadedAssets.id, references.ids)));
+        } catch { /* Retained registry entries are available for later cleanup. */ }
+      }
     }
     return json({ deleted: true }, 200, owner.setCookie);
   } catch {
